@@ -1,0 +1,155 @@
+---
+title: "Analysis Codebook"
+author: "Yashar"
+date: "August 25, 2019"
+output:
+  pdf_document: default
+  html_document:
+    keep_md: yes
+---
+
+## Project Description
+The purpose of this project is to collect and clean a data set to prepare tidy data that can be used for later analysis.
+
+##Study design and data processing
+
+###Collection of the raw data
+The experiments have been carried out with a group of 30 volunteers within an age bracket of 19-48 years. Each person performed six activities (WALKING, WALKING_UPSTAIRS, WALKING_DOWNSTAIRS, SITTING, STANDING, LAYING) wearing a smartphone (Samsung Galaxy S II) on the waist. Using its embedded accelerometer and gyroscope, we captured 3-axial linear acceleration and 3-axial angular velocity at a constant rate of 50Hz. The experiments have been video-recorded to label the data manually. The obtained dataset has been randomly partitioned into two sets, where 70% of the volunteers was selected for generating the training data and 30% the test data. 
+
+The sensor signals (accelerometer and gyroscope) were pre-processed by applying noise filters and then sampled in fixed-width sliding windows of 2.56 sec and 50% overlap (128 readings/window). The sensor acceleration signal, which has gravitational and body motion components, was separated using a Butterworth low-pass filter into body acceleration and gravity. The gravitational force is assumed to have only low frequency components, therefore a filter with 0.3 Hz cutoff frequency was used. From each window, a vector of features was obtained by calculating variables from the time and frequency domain. See reference [1]
+
+###Notes on the original (raw) data 
+N/A
+
+##Creating the tidy datafile
+
+###Guide to create the tidy data file
+The following steps were taken to create the tidy data file:
+
+1. download the data from the following link, and save the "UCI HAR Dataset" folder in my working directory: [link](https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip)
+
+2. Reading "features.txt" file the 2nd Column of which will be used to rename xtest dataframe columns.
+```{r}
+features <- read.table(file = "./UCI HAR Dataset/features.txt", header = FALSE)
+```
+
+3. Reading "X_test.txt" and "X_train.txt" file, and renaming the columns using a vector extracted from the above "features" variable. This should satisfy part 4 of the assignment.
+```{r}
+xtest <- read.table(file = "./UCI HAR Dataset/test/X_test.txt", header = FALSE, col.names = features$V2)
+xtrain <- read.table(file = "./UCI HAR Dataset/train/X_train.txt", header = FALSE, col.names = features$V2)
+```
+
+4. Reading "y_test.txt" file and "y_train.txt" file, and renaming the column to "activity.class". 
+```{r}
+ytest <- read.table(file = "./UCI HAR Dataset/test/y_test.txt", header = FALSE, col.names = "activity.class")
+ytrain <- read.table(file = "./UCI HAR Dataset/train/y_train.txt", header = FALSE, col.names = "activity.class")
+```
+
+5. Reading "subject_test.txt" file, and renaming the column to "subject.id". 
+```{r}
+subjecttest <- read.table(file = "./UCI HAR Dataset/test/subject_test.txt", header = FALSE, col.names = "subject.id")
+subjecttrain <- read.table(file = "./UCI HAR Dataset/train/subject_train.txt", header = FALSE, col.names = "subject.id")
+```
+
+###Cleaning of the data
+A Short, high-level description of cleaning process is presented in this section.
+
+6. Merging 3 sets of entities - subjects, activities, and readings.Then adding a new column named "origin" with values of "test" or "train" to specify the origin of data. dplyr package is also called from the library to use "tbl_df" function.
+```{r}
+library(dplyr)
+merged.test.data <- tbl_df(cbind(subjecttest, ytest, xtest))
+merged.test.data$origin <- "test"
+merged.train.data <- tbl_df(cbind(subjecttrain, ytrain, xtrain))
+merged.train.data$origin <- "train"
+```
+
+7. Merging the training and the test sets to create one data set and fulfill 1st part of the assignment.
+```{r}
+merged.data.set <- rbind(merged.train.data, merged.test.data)
+```
+
+8. Identifying columns labels that contain "Mean", "mean", "Std" , or "std". This will be used to extract only the measurements on the mean and standard deviation for each measurement, and complete 2nd part of assignment. "select" function from dplyr package is used to extract desired columns.
+```{r}
+selected_columns <- grep("[Mm]ean|[Ss]td", names(merged.data.set), value = TRUE)
+extracted_dataset <- select(merged.data.set, subject.id, activity.class, origin, selected_columns)
+```
+
+9. Reading "activity_labels.txt" file. The descriptive activity names in this file will be used to name the activities in the merged data set, and fulfill part 3 of the assignment.
+```{r}
+activity_labels <- read.table(file = "./UCI HAR Dataset/activity_labels.txt", header = FALSE, col.names = c("activity_id", "activity_description"))
+renamed.activity <- tbl_df(merge(x = activity_labels, y = merged.data.set, by.x = "activity_id", by.y = "activity.class", sort = FALSE))
+```
+
+10. Creating a tidy data set with the average of each variable for each activity and each subject. "group_by" and "summarise_all" functions from dplyr package were used to perform this operation and complete section 5 of the assignment. Then the outcome was written to a file "tidydata.txt".
+```{r}
+tidy.data <- renamed.activity %>% group_by(activity_description, subject.id) %>% summarise_all(mean)
+write.table(tidy.data, file = "./tidydata.txt", row.names = FALSE)
+```
+
+##Description of the variables in the tidydata.txt file
+General description of the file:
+ - Dimensions of the dataset: 180 observations of 565 variables
+ - Summary of the data: Running the structure function "str" to obtain a summary of the tidy data:
+```{r}
+str(tidy.data)
+```
+  - Variables present in the dataset: The following information is provided for each record in the dataset:
+    + Triaxial acceleration from the accelerometer (total acceleration) and the estimated body acceleration.
+    + Triaxial Angular velocity from the gyroscope. 
+    + A 561-feature vector with time and frequency domain variables. 
+    + Record activity label:
+        * activity_description: A factor variable consisted of 6 levels:
+        1. WALKING
+        2. WALKING_UPSTAIRS
+        3. WALKING_DOWNSTAIRS
+        4. SITTING
+        5. STANDING
+        6. LAYING
+        * activity_id: The ID number coresponding to each of the abovementioned activities.
+    + subject.id: An identifier of the subject who carried out the experiment.
+    + origin: : The last column of the dataframe with values of "test" or "train" to specify the origin of data.
+
+
+###Token Dictionary & Codebook
+The following token dictionary describes all the abbreviations based on information gleaned from the files in the assignment.
+in all of the measurement variables, the text tokens have the following meanings:
+
+Token	                              | Description
+----------------------------------  | -----------------------------------------------
+t prefix                            | Time domain signal.
+f	prefix                            | Frequency domain signal taken as a Fast Fourier Transform of the time-based signals.
+BodyAcc	                            | Body acceleration signal.
+GravityAcc	                        | Gravity acceleration signal.
+BodyAccJerk                         |	Jerk signal: body linear acceleration derived with respect to time.
+BodyGyro	                          | Body gyroscope  signal.
+BodyGyroJerk	                      | Jerk signal: body angular velocity  derived with respect to time.
+BodyAccMag	                        | Magnitude of body acceleration signal.
+GravityAccMag	                      | Magnitude of gravity acceleration signal.
+BodyAccJerkMag	                    | Magnitude of Jerk signal: body linear acceleration derived with respect to time.
+BodyGyroMag	                        | Magnitude of body gyroscope  signal.
+BodyGyroJerkMag	                    | Magnitude of Jerk signal: body angular velocity  derived with respect to time.
+mean	                              | Mean value.
+std	                                | Standard deviation.
+mad	                                | Median absolute deviation.
+max                                 |	Largest value in array.
+min	                                | Smallest value in array.
+sma                                 |	Signal magnitude area.
+energy                              |	Energy measure. Sum of the squares divided by the number of values.
+iqr                                 |	Interquartile range.
+entropy                             |	Signal entropy.
+arCoeff	                            | Autorregresion coefficients with Burg order equal to 4.
+correlation                         |	correlation coefficient between two signals.
+maxInds                             |	index of the frequency component with largest magnitude.
+meanFreq                            |	Weighted average of the frequency components to obtain a mean frequency.
+skewness                            |	skewness of the frequency domain signal.
+kurtosis                            |	kurtosis of the frequency domain signal.
+bandsEnergy                         |	Energy of a frequency interval within the 64 bins of the FFT of each window.
+angle                               |	Angle between to vectors.
+
+
+The tokens from this token dictionary were later used to build the variable labels/description in the tidy data set.
+
+
+
+##Sources
+[1] Davide Anguita, Alessandro Ghio, Luca Oneto, Xavier Parra and Jorge L. Reyes-Ortiz. Human Activity Recognition on Smartphones using a Multiclass Hardware-Friendly Support Vector Machine. International Workshop of Ambient Assisted Living (IWAAL 2012). Vitoria-Gasteiz, Spain. Dec 2012
